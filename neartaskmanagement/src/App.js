@@ -48,6 +48,14 @@ export default function App() {
   }
 
 
+  // add task
+  const addTask = (task) => {
+      const id = Math.floor(Math.random() * 10000) + 1
+      const newTask = { id , ...task }
+      setTasks([...tasks, newTask])
+  }
+
+
   // The useEffect hook can be used to fire side-effects during render
   // Learn more: https://reactjs.org/docs/hooks-intro.html
   React.useEffect(
@@ -103,12 +111,12 @@ export default function App() {
 
       <div className="container">
         <Header />
-        <AddTask />
+        <AddTask onAdd={addTask} />
         {tasks.length > 0 ?
           (<Tasks tasks={tasks} onDelete={deleteTask} onToggle={toggleReminder} />) :
           ('No task to show')
         }
-        
+
       </div>
     </>
   )
