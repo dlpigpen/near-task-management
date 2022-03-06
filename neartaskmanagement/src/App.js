@@ -6,6 +6,7 @@ import './global.css'
 import getConfig from './config'
 import Header from './components/Header'
 import Tasks from './components/Tasks'
+import AddTask from './components/AddTask'
 
 const { networkId } = getConfig(process.env.NODE_ENV || 'development')
 
@@ -14,35 +15,40 @@ export default function App() {
 
   const [tasks, setTasks] = useState([
     {
-        id: 1,
-        text: 'Doctos Appointment',
-        day: 'Feb 5th at 2:30 pm',
-        reminder: true,
+      id: 1,
+      text: 'Doctos Appointment',
+      day: 'Feb 5th at 2:30 pm',
+      reminder: true,
     },
     {
-        id: 2,
-        text: 'Meeting at School',
-        day: 'Feb 5th at 2:30 pm',
-        reminder: true,
+      id: 2,
+      text: 'Meeting at School',
+      day: 'Feb 5th at 2:30 pm',
+      reminder: true,
     },
     {
-        id: 3,
-        text: 'Food Shopping',
-        day: 'Feb 6th at 2:30 pm',
-        reminder: false,
+      id: 3,
+      text: 'Food Shopping',
+      day: 'Feb 6th at 2:30 pm',
+      reminder: false,
     }
-])
+  ])
 
 
+  /// delete task
+  const deleteTask = (id) => {
+    console.log(id)
+    setTasks(tasks.filter((task) => task.id !== id))
+  }
 
-/// delete task
-const deleteTask = (id) => {
-  console.log(id)
-  setTasks(tasks.filter((task) => task.id !== id ))
-}
+
+  // toggle reminder
+  const toggleReminder = (id) => {
+    setTasks(tasks.map((task) => task.id === id ? { ...task, reminder: !task.reminder } : task))
+  }
 
 
-// The useEffect hook can be used to fire side-effects during render
+  // The useEffect hook can be used to fire side-effects during render
   // Learn more: https://reactjs.org/docs/hooks-intro.html
   React.useEffect(
     () => {
@@ -97,11 +103,12 @@ const deleteTask = (id) => {
 
       <div className="container">
         <Header />
-        { tasks.length > 0  ?
-        (<Tasks tasks={tasks} onDelete={deleteTask} />) :
-        ('No task to show')
-      }
-
+        <AddTask />
+        {tasks.length > 0 ?
+          (<Tasks tasks={tasks} onDelete={deleteTask} onToggle={toggleReminder} />) :
+          ('No task to show')
+        }
+        
       </div>
     </>
   )
