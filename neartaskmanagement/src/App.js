@@ -1,12 +1,15 @@
 import 'regenerator-runtime/runtime'
 import React, { useState } from 'react'
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import { login, logout } from './utils'
 import './global.css'
 
 import getConfig from './config'
 import Header from './components/Header'
+import Footer from './components/Footer'
 import Tasks from './components/Tasks'
 import AddTask from './components/AddTask'
+import About from './components/About'
 
 const { networkId } = getConfig(process.env.NODE_ENV || 'development')
 
@@ -79,34 +82,8 @@ export default function App() {
     []
   )
 
-  // if not signed in, return early with sign-in prompt
-  if (!window.walletConnection.isSignedIn()) {
-    return (
-      <main>
-        <h1>Welcome to NEAR!</h1>
-        <p>
-          To make use of the NEAR blockchain, you need to sign in. The button
-          below will sign you in using NEAR Wallet.
-        </p>
-        <p>
-          By default, when your app runs in "development" mode, it connects
-          to a test network ("testnet") wallet. This works just like the main
-          network ("mainnet") wallet, but the NEAR Tokens on testnet aren't
-          convertible to other currencies – they're just for testing!
-        </p>
-        <p>
-          Go ahead and click the button below to try it out:
-        </p>
-        <p style={{ textAlign: 'center', marginTop: '2.5em' }}>
-          <button onClick={login}>Sign in</button>
-        </p>
-      </main>
-    )
-  }
-
   return (
-    // use React Fragment, <>, to avoid wrapping elements in unnecessary divs
-    <>
+    <Router>
       <button className="link" style={{ float: 'right' }} onClick={logout}>
         Sign out
       </button>
@@ -115,15 +92,29 @@ export default function App() {
         <Header
           onAdd={() => setShowAddTask(!showAddTask)}
           showAdd={showAddTask}
+          login={login}
+
         />
-
-        {showAddTask && <AddTask onAdd={addTask} />}
-        {tasks.length > 0 ?
-          (<Tasks tasks={tasks} onDelete={deleteTask} onToggle={toggleReminder} />) :
-          ('No task to show')
-        }
-
+        <Routes>
+          <Route
+            path='/'
+            element={
+              <>
+                {showAddTask && <AddTask onAdd={addTask} />}
+                {tasks.length > 0 ?
+                  (<Tasks
+                    tasks={tasks}
+                    onDelete={deleteTask}
+                    onToggle={toggleReminder} />) :
+                  ('No task to show')
+                }
+              </>
+            }
+          />
+          <Route path='/about' element={<About />} />
+        </Routes>
+        <Footer />
       </div>
-    </>
+    </Router>
   )
 }
