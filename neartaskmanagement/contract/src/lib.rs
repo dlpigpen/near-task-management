@@ -93,6 +93,7 @@ impl Tasks {
         }
     }
 
+    #[result_serializer(borsh)]
     pub fn get_tasks(&self) -> Vec<Task> {
         let account_id = env::signer_account_id();
         let tasks = match self.tasks.get(&account_id) {

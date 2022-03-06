@@ -1,4 +1,4 @@
-const CONTRACT_NAME = process.env.CONTRACT_NAME ||'neartaskmanagement'
+const CONTRACT_NAME = process.env.CONTRACT_NAME ||'tasktracker.mitsori1.testnet'
 
 function getConfig(env) {
   switch (env) {
