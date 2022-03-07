@@ -18,7 +18,7 @@ export async function initContract() {
   // Initializing our contract APIs by contract name and configuration
   window.contract = await new Contract(window.walletConnection.account(), nearConfig.contractName, {
     // View methods are read only. They don't modify the state, but usually return some value.
-    viewMethods: ['get_total_task', 'get_task_by_id', 'get_user_total_task', 'get_next_task_id', 'increase_post_id'],
+    viewMethods: ['get_total_task', 'get_task_by_id', 'get_user_total_task', 'get_next_task_id', 'get_user_tasks'],
     // Change methods can modify the state. But you don't receive the returned value when called.
     changeMethods: ['create_task', 'delete_task_by_id'],
   })
@@ -27,7 +27,7 @@ export async function initContract() {
 export function logout() {
   window.walletConnection.signOut()
   // reload page
-  window.location.replace(window.location.origin + window.location.pathname)
+  window.location.replace("/")
 }
 
 export function login() {

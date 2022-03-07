@@ -110,3 +110,7 @@ footer {
   margin-top: 30px;
   text-align: center;
 }
+
+div.title {
+  margin: 10px 0px 10px 0px;
+}

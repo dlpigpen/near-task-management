@@ -2,6 +2,7 @@ import 'regenerator-runtime/runtime'
 import React, { useState } from 'react'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
 import { login, logout } from './utils'
+
 import './global.css'
 
 import getConfig from './config'
@@ -10,54 +11,65 @@ import Footer from './components/Footer'
 import Tasks from './components/Tasks'
 import AddTask from './components/AddTask'
 import About from './components/About'
+import Title from './components/Title';
+import Connect from './components/Connect';
+import Loading from './components/Loading';
 
 const { networkId } = getConfig(process.env.NODE_ENV || 'development')
 
 
 export default function App() {
 
+  const [loading, setLoading] = useState(false)
+
   const [showAddTask, setShowAddTask] = useState(false)
 
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      text: 'Doctos Appointment',
-      day: 'Feb 5th at 2:30 pm',
-      reminder: true,
-    },
-    {
-      id: 2,
-      text: 'Meeting at School',
-      day: 'Feb 5th at 2:30 pm',
-      reminder: true,
-    },
-    {
-      id: 3,
-      text: 'Food Shopping',
-      day: 'Feb 6th at 2:30 pm',
-      reminder: false,
-    }
-  ])
-
+  const [tasks, setTasks] = useState([])
 
   /// delete task
-  const deleteTask = (id) => {
+  const deleteTask = async (id) => {
     console.log(id)
-    setTasks(tasks.filter((task) => task.id !== id))
+    setLoading(true)
+    const result = window.contract.delete_task_by_id(
+      {
+        task_id: id
+      }
+    );
+
+    await result;
+    setTasks(tasks.filter((task) => task.task_id !== id))
+    setLoading(false)
   }
 
 
   // toggle reminder
   const toggleReminder = (id) => {
-    setTasks(tasks.map((task) => task.id === id ? { ...task, reminder: !task.reminder } : task))
+    setTasks(tasks.map((task) => task.task_id === id ? { ...task, reminder: !task.reminder } : task))
   }
 
 
   // add task
-  const addTask = (task) => {
-    const id = Math.floor(Math.random() * 10000) + 1
-    const newTask = { id, ...task }
-    setTasks([...tasks, newTask])
+  const addTask = async (task) => {
+    try {
+      setLoading(true)
+      setShowAddTask(false)
+
+      const result = window.contract.create_task({
+        text: task.text,
+        day: task.day,
+        reminder: task.reminder,
+      });
+    
+      await result;
+      setLoading(false)
+      setShowAddTask(false)
+
+      const newTask = { id, ...task }
+      setTasks([...tasks, newTask])
+
+    } catch (e) {
+      toast.error(e.message);
+    }
   }
 
 
@@ -69,11 +81,13 @@ export default function App() {
       if (window.walletConnection.isSignedIn()) {
 
         // window.contract is set by initContract in index.js
-        window.contract.get_next_task_id({ })
+        window.contract.get_user_tasks({ account_id: window.accountId })
           .then(tasksFromContact => {
             console.log("task from contract:", tasksFromContact);
-            setTask(tasksFromContact)
+            setTasks(tasksFromContact)
           })
+      } else {
+        setTasks([])
       }
     },
 
@@ -82,12 +96,12 @@ export default function App() {
     // This works because signing into NEAR Wallet reloads the page
     []
   )
+  const notify = () => {
+    toast("Will close after 15s", { autoClose: 5000 });
+  }
 
   return (
     <Router>
-      <button className="link" style={{ float: 'right' }} onClick={logout}>
-        Sign out
-      </button>
 
       <div className="container">
         <Header
@@ -96,17 +110,20 @@ export default function App() {
           login={login}
 
         />
+        <Title />
         <Routes>
           <Route
             path='/'
             element={
               <>
+                { loading && (<Loading />) }
                 {showAddTask && <AddTask onAdd={addTask} />}
                 {tasks.length > 0 ?
                   (<Tasks
                     tasks={tasks}
                     onDelete={deleteTask}
-                    onToggle={toggleReminder} />) :
+                    onToggle={toggleReminder} 
+                    />) :
                   ('No task to show')
                 }
               </>
@@ -115,7 +132,10 @@ export default function App() {
           <Route path='/about' element={<About />} />
         </Routes>
         <Footer />
+
+
       </div>
+      <Connect onLogout={logout} />
     </Router>
   )
 }

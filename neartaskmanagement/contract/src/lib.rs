@@ -11,16 +11,14 @@ mod task;
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Tasks {
-    owner: AccountId,
-    next_task_id: usize,
-    users_tasks: UnorderedMap<AccountId, Vec<usize>>,
-    tasks: UnorderedMap<TaskId, Task>,
+    pub next_task_id: usize,
+    pub users_tasks: UnorderedMap<AccountId, Vec<usize>>,
+    pub tasks: UnorderedMap<TaskId, Task>,
 }
 
 impl Default for Tasks {
     fn default() -> Self {
         Self {
-            owner: env::signer_account_id(),
             users_tasks: UnorderedMap::new(b"up".to_vec()),
             tasks: UnorderedMap::new(b"p".to_vec()),
             next_task_id: 0,
@@ -30,6 +28,16 @@ impl Default for Tasks {
 
 #[near_bindgen]
 impl Tasks {
+    #[init]
+    pub fn new() -> Self {
+        assert!(!env::state_exists(), "The state has been already initialized");
+        Self {
+           users_tasks: UnorderedMap::new(b"up".to_vec()),
+            tasks: UnorderedMap::new(b"p".to_vec()),
+            next_task_id: 0,
+        }
+    }
+
     pub fn create_task(&mut self, text: String, day: String, reminder: bool) -> usize {
         let task_id = self.get_next_task_id();
 
@@ -87,8 +95,6 @@ impl Tasks {
     }
 
     pub fn delete_task_by_id(&mut self, task_id: usize) {
-        assert_eq!(self.owner, env::predecessor_account_id(), "Only owner can delete tasks");
-
         let account_id = env::predecessor_account_id();
         self.tasks.remove(&task_id);
 
