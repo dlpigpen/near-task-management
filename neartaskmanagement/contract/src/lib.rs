@@ -1,131 +1,111 @@
-/*
- * This is an example of a Rust smart contract with two simple, symmetric functions:
- *
- * 1. set_greeting: accepts a greeting, such as "howdy", and records it for the user (account_id)
- *    who sent the request
- * 2. get_greeting: accepts an account_id and returns the greeting saved for it, defaulting to
- *    "Hello"
- *
- * Learn more about writing NEAR smart contracts with Rust:
- * https://github.com/near/near-sdk-rs
- *
- */
-
-// To conserve gas, efficient serialization is achieved through Borsh (http://borsh.io/)
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap};
-use near_sdk::{env, near_bindgen, setup_alloc};
+use near_sdk::collections::{UnorderedMap};
+use near_sdk::{env, near_bindgen, setup_alloc, AccountId};
+use task::Task;
 
 setup_alloc!();
 
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct Task {
-    id: String,
-    text: String,
-    day: String,
-    reminder: bool,
-}
+type TaskId = usize;
+mod task;
 
-impl Default for Task {
-    fn default() -> Self {
-        Self {
-            id: String::from(""),
-            text: String::from(""),
-            day: String::from(""),
-            reminder: false,
-        }
-    }
-}
-
-impl Task {
-    pub fn new(id: String, text: String, day: String, reminder: bool) -> Self {
-        Task {
-            id: id,
-            text: text,
-            day: day,
-            reminder: reminder
-        }
-    }
-}
-
-// Structs in Rust are similar to other languages, and may include impl keyword as shown below
-// Note: the names of the structs are not important when calling the smart contract, but the function names are
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Tasks {
-    tasks: LookupMap<String, Vec<Task>>,
+    owner: AccountId,
+    next_task_id: usize,
+    users_tasks: UnorderedMap<AccountId, Vec<usize>>,
+    tasks: UnorderedMap<TaskId, Task>,
 }
 
 impl Default for Tasks {
     fn default() -> Self {
         Self {
-            tasks: LookupMap::new(b"a".to_vec()),
+            owner: env::signer_account_id(),
+            users_tasks: UnorderedMap::new(b"up".to_vec()),
+            tasks: UnorderedMap::new(b"p".to_vec()),
+            next_task_id: 0,
         }
     }
 }
 
 #[near_bindgen]
 impl Tasks {
-    pub fn add_task(&mut self, text: String, day: String, reminder: bool) {
-        let account_id = env::signer_account_id();
-        let contains_user = self.tasks.contains_key(&account_id);
+    pub fn create_task(&mut self, text: String, day: String, reminder: bool) -> usize {
+        let task_id = self.get_next_task_id();
 
-        let random_id = self.generate_id();
-        let task = Task::new( 
-            random_id,
+        let task = Task::new(
+            task_id,
             text,
             day,
             reminder
         );
 
-        if contains_user {
-            let mut templ_list = match self.tasks.get(&account_id) {
-                Some(x) => x,
-                None => vec![]
-            };
+        self.tasks.insert(&task_id, &task);
+        self.next_task_id = self.increase_post_id();
 
-            templ_list.push(task);
-            self.tasks.insert(&account_id, &templ_list);
-            
-        } else {
-            let fresh_vec = vec![task];
-            self.tasks.insert(&account_id, &fresh_vec);
-        }
+        let account_id = env::predecessor_account_id();
+        let mut users_tasks = self.users_tasks.get(&account_id).unwrap_or(vec![]);
+        users_tasks.push(task_id);
+        self.users_tasks.insert(&account_id, &users_tasks);
+
+        let task_content = task.get_task_content();
+        env::log(format!("Task '{}' was created: ", task_content).as_bytes());
+
+        task_id
     }
 
-    #[result_serializer(borsh)]
+    pub fn get_user_tasks(&self, account_id: AccountId) -> Vec<Task> {
+        let task_ids = self.users_tasks.get(&account_id).unwrap_or(vec![]);
+
+        let mut u_tasks = Vec::new();
+        for task_id in task_ids {
+            let task = self.tasks.get(&task_id).unwrap();
+            u_tasks.push(task);
+        }
+        u_tasks
+    }
+
+   pub fn get_task_by_id(&self, task_id: usize) -> Option<Task> {
+        self.tasks.get(&task_id)
+    }
+
     pub fn get_tasks(&self) -> Vec<Task> {
-        let account_id = env::signer_account_id();
-        let tasks = match self.tasks.get(&account_id) {
-            Some(x) => x,
-            None => vec![],
-        };
-        return tasks;
-    }
-
-    fn generate_id(&self) -> String {
-        let account_id = env::signer_account_id();
-        let total_task = self.get_total_task();
-        let next_id = (total_task + 1).to_string();
-        let new_id = [account_id, next_id].join("-");
-        return new_id;
-    }
-
-    pub fn delete_a_task(&mut self, task_id: String) -> bool {
-        let account_id = env::signer_account_id();
-        let mut user_tasks = self.get_tasks();
-        if user_tasks.len() > 0 {
-            let index = user_tasks.iter().position(|x| *x.id == task_id).unwrap();
-            user_tasks.remove(index);
-            self.tasks.insert(&account_id, &user_tasks);
-            return true
+        let mut tasks = Vec::new();
+        for task_id in self.tasks.keys() {
+            tasks.push(self.tasks.get(&task_id).unwrap());
         }
-        return false
+        tasks
     }
 
-    pub fn get_total_task(&self) -> usize {
-        let tasks  = self.get_tasks();
-        return tasks.len();
+    pub fn get_total_task(&self) -> u64 {
+        self.tasks.len()
+    }
+
+    pub fn get_user_total_task(&self, account_id: String) -> usize {
+        let utasks = self.users_tasks.get(&account_id).unwrap_or(vec![]);
+        utasks.len()
+    }
+
+    pub fn delete_task_by_id(&mut self, task_id: usize) {
+        assert_eq!(self.owner, env::predecessor_account_id(), "Only owner can delete tasks");
+
+        let account_id = env::predecessor_account_id();
+        self.tasks.remove(&task_id);
+
+        let mut  utasks = self.users_tasks
+            .get(&account_id)
+            .unwrap_or(vec![]);
+        utasks.retain(|&x| x != task_id);
+        self.users_tasks.insert(&account_id, &utasks);
+
+    }
+
+    pub fn get_next_task_id(&self) -> usize {
+        self.next_task_id
+    }
+
+    pub fn increase_post_id(&self) -> usize {
+        self.next_task_id + 1
     }
 }
 
@@ -135,74 +115,67 @@ mod tests {
     use near_sdk::MockedBlockchain;
     use near_sdk::{testing_env, VMContext};
 
-    fn get_context(predecessor_account_id: String, storage_usage: u64) -> VMContext {
+   fn get_context(input: Vec<u8>, is_view: bool) -> VMContext {
         VMContext {
-            current_account_id: "alice.testnet".to_string(),
+            current_account_id: "tasktracker.mitsori1.testnet".to_string(),
             signer_account_id: "mitsori1.testnet".to_string(),
             signer_account_pk: vec![0, 1, 2],
-            predecessor_account_id,
-            input: vec![],
+            predecessor_account_id: "mitsori1.testnet".to_string(),
+            input,
             block_index: 0,
             block_timestamp: 0,
-            account_balance: 0,
+            account_balance: 1000000000000000000000000,
             account_locked_balance: 0,
-            storage_usage,
+            storage_usage: 0,
             attached_deposit: 0,
             prepaid_gas: 10u64.pow(18),
             random_seed: vec![0, 1, 2],
-            is_view: false,
+            is_view,
             output_data_receivers: vec![],
             epoch_height: 19,
         }
     }
 
     #[test]
-    fn get_current_total_task() {
-        let context = get_context(String::from("mitsori1.testnet"), 0);
+    fn create_task() {
+        let context = get_context(vec![], false);
         testing_env!(context);
         let mut contract = Tasks::default();
-        contract.add_task(
-            String::from("day1"),
-            String::from("date1"),
-            true
+        contract.create_task(
+        String::from("Task 1"),
+        String::from("Feb 7"),
+        false,
         );
-        let total_task = contract.get_total_task();
-        println!("Total task after increment: {}", total_task);
-        assert_eq!(1, total_task, "Expected empty");
+
+        // log id
+        env::log(format!("Task added: {}",
+             contract.get_task_by_id(0)
+                    .unwrap()
+                    .get_task_content())
+                    .as_bytes()
+        );
+
+        assert_eq!("Task 1".to_string(), contract.get_task_by_id(0).unwrap().get_task_content());
+
+        let user_tasks = contract.get_user_tasks("mitsori1.testnet".to_string());
+        assert_eq!(1, user_tasks.len());
+        assert_eq!(0, user_tasks[0].get_task_id());
     }
 
     #[test]
-    fn get_task_id() {
-        let context = get_context(String::from("mitsori1.testnet"), 0);
+    fn delete_task() {
+        let context = get_context(vec![], false);
         testing_env!(context);
-        let contract = Tasks::default();
-        let unique_id = contract.generate_id();
-        println!("Unique id: {}", unique_id);
-        assert_eq!(unique_id, "mitsori1.testnet-1", "Does not match id");
-    }
 
-    #[test]
-    fn get_delete_task() {
-        let context = get_context(String::from("mitsori1.testnet"), 0);
-        testing_env!(context);
         let mut contract = Tasks::default();
-         contract.add_task(
-            String::from("day1"),
-            String::from("date1"),
-            true
+        contract.create_task(
+            String::from("Task 1"),
+            String::from("Feb 7"),
+            false,
         );
-        let total_after_added = contract.get_total_task();
-        assert_eq!(1, total_after_added, "Add function broken");
+        contract.delete_task_by_id(0);
+        assert_eq!(0, contract.get_total_task(), "Delete does not work");
 
-        let tasks = contract.get_tasks();
-        let first_task = tasks.first().unwrap();
-        assert_eq!(first_task.id, "mitsori1.testnet-1", "id does not match");
-
-        let task_id = String::from(&first_task.id);
-        contract.delete_a_task(task_id);
-        let total_after_deleted = contract.get_total_task();
-        assert_eq!(0, total_after_deleted, "After deleted wrong number");
-
+        assert_eq!(0, contract.get_user_total_task(String::from("mitsori1.testnet")), "User total post does not work");
     }
-
 }

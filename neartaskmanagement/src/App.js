@@ -69,9 +69,10 @@ export default function App() {
       if (window.walletConnection.isSignedIn()) {
 
         // window.contract is set by initContract in index.js
-        window.contract.get_greeting({ account_id: window.accountId })
-          .then(greetingFromContract => {
-            set_greeting(greetingFromContract)
+        window.contract.get_next_task_id({ })
+          .then(tasksFromContact => {
+            console.log("task from contract:", tasksFromContact);
+            setTask(tasksFromContact)
           })
       }
     },
